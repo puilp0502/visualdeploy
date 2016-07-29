@@ -1,19 +1,29 @@
 import os
 import subprocess
 
+from werkzeug.wrappers import Request, Response
+from werkzeug.routing import Map, Rule
+from werkzeug.exceptions import HTTPException
+
+
 def execute(commands, head=None, post_run=None, success_color='00e676', error_color='e57373', hide_homedir=True):
     if head is None:
         head = """
     <head>
-        <script type="text/javascript" src="https://code.jquery.com/jquery-1.12.4.min.js"></script>
+        <script type="text/javascript">
+            function $(selector){
+                return document.querySelector(selector);
+            }
+        </script>
         <title>VisualDeploy</title>
         <style>body{font-family: sans-serif;}</style>
     </head>"""
     if post_run is None:    
-        post_run = """<script>
-    window.scroll(0, document.body.scrollHeight);
-    $("#output-{i}").css({"background-color": "#{color}"});
-</script>
+        post_run = """
+    <script>
+        window.scroll(0, document.body.scrollHeight);
+        $("#output-{i}").style.backgroundColor = "#{color}";
+    </script>
     """
 
     home = os.getenv('HOME')
@@ -63,3 +73,29 @@ def execute(commands, head=None, post_run=None, success_color='00e676', error_co
         yield "</div><hr/>"
         i += 1
     yield "<h3>Deploy Completed!</h3>"
+
+
+def make_app(commands, deploy_route="/stream"):
+    class VD(object):
+        def __init__(self, commands):
+            self.url_map = Map([
+                Rule(deploy_route, endpoint='stream')
+            ])
+            self.commands = commands
+        def dispatch_request(self, request):
+            adapter = self.url_map.bind_to_environ(request.environ)
+            try:
+                endpoint, values = adapter.match()
+                if endpoint == 'stream':
+                    return Response(execute(self.commands), mimetype='text/html')
+            except HTTPException as e:
+                return e
+        def wsgi_app(self, environ, start_response):
+            request = Request(environ)
+            response = self.dispatch_request(request)
+            return response(environ, start_response)
+        def __call__(self, environ, start_response):
+            return self.wsgi_app(environ, start_response)
+    app = VD(commands)
+    return app
+
