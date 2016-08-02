@@ -31,6 +31,6 @@ Yes, you need to deploy an deployment webhook.
 As a simple solution, you can use [gunicorn](http://gunicorn.org/):
 ```bash
 $ pip install gunicorn
-$ gunicorn app:app --timeout 120 --bind 0.0.0.0:8000 -D
+$ gunicorn app:app -w 1 --timeout 120 --bind 0.0.0.0:8000 -D
 ```
 or other solutions such as mod_wsgi.
